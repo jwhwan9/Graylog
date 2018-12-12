@@ -1,0 +1,96 @@
+[CentOS7]
+
+CentOS7 系統 CentOS-Extras 庫中已內建 Docker，可以直接安裝：
+$ sudo yum install docker
+
+安裝之後啟動 Docker 服務，並讓它隨系統啟動自動載入。
+$ sudo service docker start
+$ sudo chkconfig docker on
+
+安裝 JVM 1.8.0 build 131 以上
+$ yum install java-1.8.0-openjdk-headless.x86_64
+
+===
+
+如果失敗有幾個可能
+
+[全部移除，直接重裝]
+> yum remove vlc
+
+[安裝 device-mapper-event-libs]
+> yum install device-mapper-event-libs
+
+[已經裝過 docker 被舊版本卡住]
+
+> rm -rf \var\lib\docker
+
+[如果砍不掉，可能是被其他人 mount 卡住，將它找出來 umount]
+> mount | grep docker
+> umount \dev\mounter....
+> rm -rf \var\lib\docker
+
+[yum 相關套件太舊，更新]
+> yum update
+> yum install docker
+> systemctl start docker
+
+
+
+===
+Docker 安裝與製作 offline image
+
+[取得 Docker Image]
+> docker pull mongo:3
+> docker pull docker.elastic.co/elasticsearch/elasticsearch:5.6.12
+> docker pull graylog/graylog:2.4
+
+[更改到自己的帳號目錄下]:  避免權限問題
+> cd 
+> mkdir docker
+> cd docker
+
+[存成 Docker Image: graylog_image.docker]
+> docker save -o mongo3_image.docker mongo:3
+> docker save -o elastic5_image.docker elasticsearch:5
+> docker save -o graylog2.4_image.docker graylog/graylog:2.4
+
+
+[匯入 Docker Image: graylog_image.docker]
+> docker load -i mongo3_image.docker 
+> docker load -i elastic5_image.docker 
+> docker load -i graylog2.4_image.docker
+
+
+[執行 Docker Image]
+> docker run --name mongo -d mongo:3
+
+> docker run --name elasticsearch \
+    -e "http.host=0.0.0.0" -e "xpack.security.enabled=false" \
+    -e ES_JAVA_OPTS="-Xms2g -Xmx2g" \
+    -d docker.elastic.co/elasticsearch/elasticsearch:5.6.12
+
+> docker run --name graylog --link mongo --link elasticsearch \
+    -p 9000:9000 -p 12201:12201 -p 514:514 -p 5044:5044 \
+    -e GRAYLOG_WEB_ENDPOINT_URI="http://172.16.160.42:9000/api" \
+    -e GRAYLOG_SERVER_JAVA_OPTS="-Xms2g -Xmx2g -XX:NewRatio=1 -XX:MaxMetaspaceSize=512m -server -XX:+ResizeTLAB -XX:+UseConcMarkSweepGC -XX:+CMSConcurrentMTEnabled -XX:+CMSClassUnloadingEnabled -XX:+UseParNewGC -XX:-OmitStackTraceInFastThrow" \
+    -d graylog/graylog:2.4
+
+[查看 Docker Container (image) 執行紀錄]
+> docker logs elasticsearch
+
+[Elasticsearch 跳出 vm.max_map_count is too low 問題]
+ (message): max virtual memory areas vm.max_map_count [65530] is too low, increase to at least [262144]
+
+在 linux 下執行 (但重新開機後會出現一樣錯誤，需修改啟動設定)
+> sysctl -w vm.max_map_count=262144
+
+重開機後也要生效:
+> echo "vm.max_map_count=262144" > /etc/sysctl.conf
+> sysctl -p
+
+[停止 Docker ] 
+
+# 查看 docker id
+> docker ps 
+
+> docker stop <docker id>
